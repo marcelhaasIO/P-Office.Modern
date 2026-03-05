@@ -1,0 +1,481 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  LOCKED
+  DISABLED
+}
+
+enum AddressType {
+  CUSTOMER
+  SUPPLIER
+  EMPLOYEE
+  LEAD
+  PARTNER
+  OTHER
+}
+
+enum FiscalPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  status    CompanyStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companies Company[]
+  users     User[]
+  roles     Role[]
+  permissions Permission[]
+  tags      Tag[]
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  tenantId    String
+  code        String
+  name        String
+  currency    String   @default("CHF")
+  vatNumber   String?
+  uidNumber   String?
+  status      CompanyStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  addresses   Address[]
+  userLinks   UserCompany[]
+  numberSequences NumberSequence[]
+  fiscalYears FiscalYear[]
+  printLayouts PrintLayout[]
+  accounts   Account[]
+  vatCodes   VatCode[]
+  tags       Tag[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+}
+
+model User {
+  id          String   @id @default(cuid())
+  tenantId    String
+  email       String
+  firstName   String
+  lastName    String
+  status      UserStatus @default(INVITED)
+  locale      String   @default("de-CH")
+  passwordHash String?
+  lastLoginAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  companies   UserCompany[]
+  userRoles   UserRole[]
+  sessions    Session[]
+  passkeys    PasskeyCredential[]
+  mfaFactors  MfaFactor[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, status])
+}
+
+model UserCompany {
+  id         String   @id @default(cuid())
+  userId     String
+  companyId  String
+  isDefault  Boolean  @default(false)
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, companyId])
+}
+
+model Role {
+  id        String   @id @default(cuid())
+  tenantId  String
+  code      String
+  name      String
+  isSystem  Boolean  @default(false)
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  rolePermissions RolePermission[]
+  users     UserRole[]
+
+  @@unique([tenantId, code])
+}
+
+model Permission {
+  id          String @id @default(cuid())
+  tenantId    String
+  code        String
+  description String?
+
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  rolePermissions RolePermission[]
+
+  @@unique([tenantId, code])
+}
+
+model RolePermission {
+  roleId        String
+  permissionId  String
+
+  role          Role @relation(fields: [roleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  permission    Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  companyId String?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, roleId, companyId])
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model PasskeyCredential {
+  id            String   @id @default(cuid())
+  userId        String
+  credentialId  String   @unique
+  publicKey     String
+  counter       Int      @default(0)
+  transports    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model MfaFactor {
+  id              String   @id @default(cuid())
+  userId          String
+  type            String
+  secretEncrypted String?
+  verifiedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model NumberSequence {
+  id          String   @id @default(cuid())
+  companyId   String
+  key         String
+  prefix      String
+  year        Int
+  lastNumber  Int      @default(0)
+  padding     Int      @default(6)
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([companyId, key, year])
+}
+
+model FiscalYear {
+  id          String   @id @default(cuid())
+  companyId   String
+  year        Int
+  startDate   DateTime
+  endDate     DateTime
+  isClosed    Boolean  @default(false)
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  periods     FiscalPeriod[]
+
+  @@unique([companyId, year])
+}
+
+model FiscalPeriod {
+  id          String   @id @default(cuid())
+  fiscalYearId String
+  periodNo    Int
+  startDate   DateTime
+  endDate     DateTime
+  status      FiscalPeriodStatus @default(OPEN)
+  lockedAt    DateTime?
+
+  fiscalYear  FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([fiscalYearId, periodNo])
+}
+
+model Address {
+  id          String   @id @default(cuid())
+  tenantId    String
+  companyId   String
+  addressNo   String
+  type        AddressType
+  firmName    String
+  firstName   String?
+  lastName    String?
+  street      String
+  houseNo     String?
+  zipCode     String
+  city        String
+  canton      String?
+  countryCode String   @default("CH")
+  email       String?
+  phone       String?
+  mobile      String?
+  website     String?
+  vatNo       String?
+  uidNo       String?
+  language    String   @default("de-CH")
+  notes       String?
+  searchText  String?
+  searchVector Unsupported("tsvector")?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  contacts    ContactPerson[]
+  categories  AddressCategoryMap[]
+  properties  AddressPropertyValue[]
+  bankAccounts AddressBankAccount[]
+
+  @@unique([companyId, addressNo])
+  @@index([tenantId, companyId, firmName])
+  @@index([searchVector], type: Gin)
+}
+
+model ContactPerson {
+  id          String   @id @default(cuid())
+  addressId   String
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  mobile      String?
+  role        String?
+  isPrimary   Boolean  @default(false)
+
+  address     Address  @relation(fields: [addressId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([addressId, isPrimary])
+}
+
+model AddressCategory {
+  id          String   @id @default(cuid())
+  tenantId    String
+  companyId   String
+  key         String
+  label       String
+
+  maps        AddressCategoryMap[]
+
+  @@unique([companyId, key])
+}
+
+model AddressCategoryMap {
+  addressId   String
+  categoryId  String
+
+  address     Address         @relation(fields: [addressId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  category    AddressCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([addressId, categoryId])
+}
+
+model AddressPropertyDefinition {
+  id          String   @id @default(cuid())
+  tenantId    String
+  companyId   String
+  key         String
+  label       String
+  valueType   String
+
+  values      AddressPropertyValue[]
+
+  @@unique([companyId, key])
+}
+
+model AddressPropertyValue {
+  id          String   @id @default(cuid())
+  definitionId String
+  addressId   String
+  valueText   String?
+  valueNumber Decimal? @db.Decimal(18,4)
+  valueDate   DateTime?
+  valueBool   Boolean?
+  valueJson   Json?
+
+  definition  AddressPropertyDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  address     Address                   @relation(fields: [addressId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([definitionId, addressId])
+}
+
+model AddressBankAccount {
+  id          String   @id @default(cuid())
+  addressId   String
+  iban        String
+  bic         String?
+  bankName    String?
+  isDefault   Boolean  @default(false)
+
+  address     Address  @relation(fields: [addressId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([addressId, isDefault])
+}
+
+model PlzDirectory {
+  id          String   @id @default(cuid())
+  zipCode     String
+  city        String
+  canton      String
+  countryCode String   @default("CH")
+  bfsNo       String?
+
+  @@unique([zipCode, city, countryCode])
+  @@index([zipCode, city])
+}
+
+model PrintLayout {
+  id            String   @id @default(cuid())
+  tenantId      String
+  companyId     String?
+  moduleCode    String
+  documentType  String
+  name          String
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company       Company? @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  versions      PrintLayoutVersion[]
+
+  @@index([tenantId, companyId, moduleCode, documentType])
+}
+
+model PrintLayoutVersion {
+  id            String   @id @default(cuid())
+  layoutId      String
+  versionNo     Int
+  schemaJson    Json
+  rendererJson  Json
+  isPublished   Boolean  @default(false)
+  checksumSha256 String
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  layout        PrintLayout @relation(fields: [layoutId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([layoutId, versionNo])
+  @@index([layoutId, isPublished])
+}
+
+model Tag {
+  id          String   @id @default(cuid())
+  tenantId    String
+  companyId   String?
+  key         String
+  label       String
+  colorToken  String?
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  company     Company? @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  assignments TagAssignment[]
+
+  @@unique([tenantId, companyId, key])
+}
+
+model TagAssignment {
+  id          String   @id @default(cuid())
+  tagId       String
+  entityType  String
+  entityId    String
+
+  tag         Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([tagId, entityType, entityId])
+  @@index([entityType, entityId])
+}
+
+model Account {
+  id          String   @id @default(cuid())
+  companyId   String
+  accountNo   String
+  name        String
+  type        String
+  vatRelevant Boolean  @default(false)
+  isActive    Boolean  @default(true)
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([companyId, accountNo])
+  @@index([companyId, type, isActive])
+}
+
+model VatCode {
+  id            String   @id @default(cuid())
+  companyId     String
+  code          String
+  ratePct       Decimal  @db.Decimal(7,4)
+  method        String
+  inputAccountNo String?
+  outputAccountNo String?
+  activeFrom    DateTime
+  activeTo      DateTime?
+
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([companyId, code, activeFrom])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  tenantId      String
+  companyId     String?
+  actorUserId   String?
+  tableName     String
+  recordId      String
+  action        String
+  oldValues     Json?
+  newValues     Json?
+  changedFields String[]
+  correlationId String?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, companyId, createdAt])
+  @@index([tableName, recordId, createdAt])
+}

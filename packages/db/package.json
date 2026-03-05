@@ -1,0 +1,24 @@
+{
+  "name": "@po/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:status": "prisma migrate status",
+    "db:seed": "tsx prisma/seed.ts",
+    "build": "tsc -p tsconfig.json",
+    "lint": "echo lint-db",
+    "test": "echo test-db"
+  },
+  "dependencies": {
+    "@prisma/client": "5.22.0"
+  },
+  "devDependencies": {
+    "prisma": "5.22.0",
+    "tsx": "^4.19.2",
+    "typescript": "5.7.2"
+  }
+}
