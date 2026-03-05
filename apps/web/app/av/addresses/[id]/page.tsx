@@ -132,7 +132,10 @@ type PageProps = {
 export default async function AddressDetailPage({ params }: PageProps) {
   const { id } = await params;
   const caller = await getCaller();
-  const address = await caller.av.getAddress({ id });
+  const [address, timeline] = await Promise.all([
+    caller.av.getAddress({ id }),
+    caller.av.getAddressTimeline({ id, limit: 25 })
+  ]);
 
   if (!address) {
     return (
@@ -223,6 +226,15 @@ export default async function AddressDetailPage({ params }: PageProps) {
                   <button type="submit">Kontakt löschen</button>
                 </form>
               </div>
+            </li>
+          ))}
+        </ul>
+
+        <h2>Timeline</h2>
+        <ul>
+          {timeline.items.map((item) => (
+            <li key={item.id}>
+              {new Date(item.createdAt).toLocaleString('de-CH')} · {item.summary}
             </li>
           ))}
         </ul>

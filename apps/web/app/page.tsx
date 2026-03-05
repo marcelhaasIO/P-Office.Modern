@@ -98,6 +98,10 @@ export default async function HomePage() {
           <button type="submit">Save Address</button>
         </form>
 
+        <p>
+          <Link href="/av/import">CSV/TwixTel Import öffnen</Link>
+        </p>
+
         <h2>Latest Addresses</h2>
         <ul>
           {(addresses?.items ?? []).map((item) => (
