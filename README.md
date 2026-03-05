@@ -22,6 +22,12 @@ Cloud-first, multi-tenant ERP replacement for Swiss trades.
 - Database/Auth-Data: Supabase PostgreSQL
 - Deployment runbook: `docs/deployment/vercel-supabase.md`
 
+## Vercel Import (First Deploy)
+1. Import GitHub repo `marcelhaasIO/P-Office.Modern` in Vercel.
+2. Keep framework `Next.js` and set Root Directory to `apps/web` (if prompted).
+3. Add environment values from `.env.vercel.example`.
+4. Deploy.
+
 ## Production DB Commands
 - `pnpm db:migrate:deploy`
 - `pnpm db:migrate:status`
