@@ -25,22 +25,110 @@ export const avRouter = createRouter({
         limit: z.number().int().min(1).max(100).default(25)
       })
     )
-    .query(({ input }) => ({
-      total: 0,
-      items: [] as Array<{ id: string; addressNo: string; firmName: string; city: string }>,
-      query: input.query ?? null
-    })),
+    .query(async ({ ctx, input }) => {
+      const query = input.query?.trim();
 
-  createAddress: companyProcedure.input(addressInput).mutation(({ ctx, input }) => ({
-    id: `addr_${input.addressNo}`,
-    companyId: ctx.companyId,
-    ...input
-  })),
+      const where = {
+        companyId: ctx.companyId,
+        ...(query
+          ? {
+              OR: [
+                { firmName: { contains: query, mode: 'insensitive' as const } },
+                { addressNo: { contains: query, mode: 'insensitive' as const } },
+                { city: { contains: query, mode: 'insensitive' as const } }
+              ]
+            }
+          : {})
+      };
+
+      const [items, total] = await Promise.all([
+        ctx.db.address.findMany({
+          where,
+          orderBy: [{ updatedAt: 'desc' }],
+          take: input.limit,
+          select: {
+            id: true,
+            addressNo: true,
+            firmName: true,
+            city: true,
+            zipCode: true,
+            type: true
+          }
+        }),
+        ctx.db.address.count({ where })
+      ]);
+
+      return {
+        total,
+        items,
+        query: query ?? null
+      };
+    }),
+
+  createAddress: companyProcedure.input(addressInput).mutation(async ({ ctx, input }) => {
+    const created = await ctx.db.address.create({
+      data: {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        addressNo: input.addressNo,
+        type: input.type,
+        firmName: input.firmName,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        street: input.street,
+        houseNo: input.houseNo,
+        zipCode: input.zipCode,
+        city: input.city,
+        canton: input.canton,
+        countryCode: input.countryCode,
+        email: input.email,
+        phone: input.phone
+      },
+      select: {
+        id: true,
+        addressNo: true,
+        firmName: true,
+        city: true,
+        zipCode: true,
+        type: true
+      }
+    });
+
+    await ctx.db.auditLog.create({
+      data: {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        actorUserId: ctx.userId,
+        tableName: 'Address',
+        recordId: created.id,
+        action: 'INSERT',
+        newValues: created,
+        changedFields: ['addressNo', 'firmName', 'city', 'zipCode', 'type']
+      }
+    });
+
+    return created;
+  }),
 
   plzAutocomplete: companyProcedure
     .input(z.object({ zipCode: z.string().min(2), limit: z.number().int().min(1).max(20).default(10) }))
-    .query(({ input }) => ({
-      zipCode: input.zipCode,
-      suggestions: [] as Array<{ zipCode: string; city: string; canton: string }>
-    }))
+    .query(async ({ ctx, input }) => {
+      const suggestions = await ctx.db.plzDirectory.findMany({
+        where: {
+          zipCode: { startsWith: input.zipCode }
+        },
+        orderBy: [{ zipCode: 'asc' }, { city: 'asc' }],
+        take: input.limit,
+        select: {
+          zipCode: true,
+          city: true,
+          canton: true
+        }
+      });
+
+      return {
+        zipCode: input.zipCode,
+        suggestions
+      };
+    })
 });

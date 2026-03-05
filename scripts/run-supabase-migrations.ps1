@@ -38,6 +38,7 @@ if ($LASTEXITCODE -ne 0) {
 
 if ($WithSeed) {
   Write-Host 'Running seed...'
+  [System.Environment]::SetEnvironmentVariable('DATABASE_URL', $env:DIRECT_URL, 'Process')
   corepack pnpm db:seed
   if ($LASTEXITCODE -ne 0) {
     throw 'db:seed failed.'

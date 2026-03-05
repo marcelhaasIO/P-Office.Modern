@@ -6,12 +6,23 @@ const switchCompanyInput = z.object({
 });
 
 export const foundationRouter = createRouter({
-  health: companyProcedure.query(({ ctx }) => ({
-    ok: true,
-    tenantId: ctx.tenantId,
-    companyId: ctx.companyId,
-    at: new Date().toISOString()
-  })),
+  health: companyProcedure.query(async ({ ctx }) => {
+    const [addressCount, userCount] = await Promise.all([
+      ctx.db.address.count({ where: { companyId: ctx.companyId } }),
+      ctx.db.userCompany.count({ where: { companyId: ctx.companyId } })
+    ]);
+
+    return {
+      ok: true,
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      at: new Date().toISOString(),
+      stats: {
+        addressCount,
+        userCount
+      }
+    };
+  }),
 
   switchCompany: companyProcedure.input(switchCompanyInput).mutation(({ input }) => ({
     switched: true,
