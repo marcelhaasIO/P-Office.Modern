@@ -17,7 +17,52 @@ const addressInput = z.object({
   phone: z.string().optional()
 });
 
+const addressIdInput = z.object({
+  id: z.string().min(1)
+});
+
+const addressUpdateInput = z.object({
+  id: z.string().min(1),
+  firmName: z.string().min(1),
+  street: z.string().min(1),
+  zipCode: z.string().min(4).max(10),
+  city: z.string().min(1),
+  canton: z.string().optional(),
+  email: z.string().email().optional(),
+  phone: z.string().optional()
+});
+
+const contactInput = z.object({
+  addressId: z.string().min(1),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  role: z.string().optional(),
+  isPrimary: z.boolean().default(false)
+});
+
 export const avRouter = createRouter({
+  getAddress: companyProcedure.input(addressIdInput).query(async ({ ctx, input }) => {
+    const address = await ctx.db.address.findFirst({
+      where: {
+        id: input.id,
+        companyId: ctx.companyId
+      },
+      include: {
+        contacts: {
+          orderBy: [{ isPrimary: 'desc' }, { lastName: 'asc' }, { firstName: 'asc' }]
+        }
+      }
+    });
+
+    if (!address) {
+      return null;
+    }
+
+    return address;
+  }),
+
   listAddresses: companyProcedure
     .input(
       z.object({
@@ -104,6 +149,92 @@ export const avRouter = createRouter({
         action: 'INSERT',
         newValues: created,
         changedFields: ['addressNo', 'firmName', 'city', 'zipCode', 'type']
+      }
+    });
+
+    return created;
+  }),
+
+  updateAddress: companyProcedure.input(addressUpdateInput).mutation(async ({ ctx, input }) => {
+    const updated = await ctx.db.address.update({
+      where: { id: input.id },
+      data: {
+        firmName: input.firmName,
+        street: input.street,
+        zipCode: input.zipCode,
+        city: input.city,
+        canton: input.canton,
+        email: input.email,
+        phone: input.phone
+      },
+      select: {
+        id: true,
+        addressNo: true,
+        firmName: true,
+        city: true,
+        zipCode: true,
+        type: true
+      }
+    });
+
+    await ctx.db.auditLog.create({
+      data: {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        actorUserId: ctx.userId,
+        tableName: 'Address',
+        recordId: updated.id,
+        action: 'UPDATE',
+        newValues: updated,
+        changedFields: ['firmName', 'street', 'zipCode', 'city', 'canton', 'email', 'phone']
+      }
+    });
+
+    return updated;
+  }),
+
+  addContact: companyProcedure.input(contactInput).mutation(async ({ ctx, input }) => {
+    const targetAddress = await ctx.db.address.findFirst({
+      where: {
+        id: input.addressId,
+        companyId: ctx.companyId
+      },
+      select: { id: true }
+    });
+
+    if (!targetAddress) {
+      throw new Error('Address not found for current company context.');
+    }
+
+    if (input.isPrimary) {
+      await ctx.db.contactPerson.updateMany({
+        where: { addressId: input.addressId, isPrimary: true },
+        data: { isPrimary: false }
+      });
+    }
+
+    const created = await ctx.db.contactPerson.create({
+      data: {
+        addressId: input.addressId,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        email: input.email,
+        phone: input.phone,
+        role: input.role,
+        isPrimary: input.isPrimary
+      }
+    });
+
+    await ctx.db.auditLog.create({
+      data: {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        actorUserId: ctx.userId,
+        tableName: 'ContactPerson',
+        recordId: created.id,
+        action: 'INSERT',
+        newValues: created,
+        changedFields: ['addressId', 'firstName', 'lastName', 'email', 'phone', 'role', 'isPrimary']
       }
     });
 

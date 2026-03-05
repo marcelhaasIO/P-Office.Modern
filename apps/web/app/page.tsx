@@ -1,4 +1,5 @@
 import { revalidatePath } from 'next/cache';
+import Link from 'next/link';
 import { appRouter, createContext } from '@po/api';
 
 export const dynamic = 'force-dynamic';
@@ -101,7 +102,9 @@ export default async function HomePage() {
         <ul>
           {(addresses?.items ?? []).map((item) => (
             <li key={item.id}>
-              {item.addressNo} — {item.firmName} ({item.zipCode} {item.city})
+              <Link href={`/av/addresses/${item.id}`}>
+                {item.addressNo} — {item.firmName} ({item.zipCode} {item.city})
+              </Link>
             </li>
           ))}
         </ul>
