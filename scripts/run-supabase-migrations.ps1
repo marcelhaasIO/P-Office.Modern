@@ -26,13 +26,22 @@ if (-not $env:DATABASE_URL -or -not $env:DIRECT_URL) {
 
 Write-Host 'Running Prisma migrate deploy against Supabase...'
 corepack pnpm db:migrate:deploy
+if ($LASTEXITCODE -ne 0) {
+  throw 'db:migrate:deploy failed.'
+}
 
 Write-Host 'Checking migration status...'
 corepack pnpm db:migrate:status
+if ($LASTEXITCODE -ne 0) {
+  throw 'db:migrate:status failed.'
+}
 
 if ($WithSeed) {
   Write-Host 'Running seed...'
   corepack pnpm db:seed
+  if ($LASTEXITCODE -ne 0) {
+    throw 'db:seed failed.'
+  }
 }
 
 Write-Host 'Done.'

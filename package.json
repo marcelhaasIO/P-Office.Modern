@@ -8,12 +8,12 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "db:generate": "pnpm --filter @po/db db:generate",
-    "db:migrate": "pnpm --filter @po/db db:migrate",
-    "db:migrate:deploy": "pnpm --filter @po/db db:migrate:deploy",
-    "db:migrate:status": "pnpm --filter @po/db db:migrate:status",
-    "db:seed": "pnpm --filter @po/db db:seed",
-    "e2e": "pnpm --filter @po/e2e test"
+    "db:generate": "corepack pnpm --filter @po/db db:generate",
+    "db:migrate": "corepack pnpm --filter @po/db db:migrate",
+    "db:migrate:deploy": "corepack pnpm --filter @po/db db:migrate:deploy",
+    "db:migrate:status": "corepack pnpm --filter @po/db db:migrate:status",
+    "db:seed": "corepack pnpm --filter @po/db db:seed",
+    "e2e": "corepack pnpm --filter @po/e2e test"
   },
   "dependencies": {
     "next": "16.0.0",
