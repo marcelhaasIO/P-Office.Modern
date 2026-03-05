@@ -31,3 +31,13 @@ Cloud-first, multi-tenant ERP replacement for Swiss trades.
 ## Production DB Commands
 - `pnpm db:migrate:deploy`
 - `pnpm db:migrate:status`
+
+## Local Test with Supabase (No Local Postgres)
+1. Copy `.env.supabase.local.example` to `.env.supabase.local`.
+2. Replace `[password]` and API key placeholders.
+3. Run migrations:
+	- `pwsh ./scripts/run-supabase-migrations.ps1`
+4. Optionally run seed:
+	- `pwsh ./scripts/run-supabase-migrations.ps1 -WithSeed`
+5. Start app locally:
+	- `corepack pnpm --filter @po/web dev`
