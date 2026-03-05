@@ -2,7 +2,7 @@
   "name": "p-office-modern",
   "private": true,
   "version": "0.1.0",
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@10.30.3",
   "scripts": {
     "dev": "turbo run dev --parallel",
     "build": "turbo run build",
