@@ -65,6 +65,66 @@ async function createContactAction(formData: FormData) {
   revalidatePath(`/av/addresses/${addressId}`);
 }
 
+async function updateContactAction(formData: FormData) {
+  'use server';
+
+  const id = String(formData.get('id') ?? '').trim();
+  const addressId = String(formData.get('addressId') ?? '').trim();
+  const firstName = String(formData.get('firstName') ?? '').trim();
+  const lastName = String(formData.get('lastName') ?? '').trim();
+
+  if (!id || !addressId || !firstName || !lastName) {
+    throw new Error('Missing required fields for contact update.');
+  }
+
+  const caller = await getCaller();
+
+  await caller.av.updateContact({
+    id,
+    addressId,
+    firstName,
+    lastName,
+    email: String(formData.get('email') ?? '').trim() || undefined,
+    phone: String(formData.get('phone') ?? '').trim() || undefined,
+    role: String(formData.get('role') ?? '').trim() || undefined,
+    isPrimary: String(formData.get('isPrimary') ?? '') === 'on'
+  });
+
+  revalidatePath(`/av/addresses/${addressId}`);
+}
+
+async function setPrimaryContactAction(formData: FormData) {
+  'use server';
+
+  const id = String(formData.get('id') ?? '').trim();
+  const addressId = String(formData.get('addressId') ?? '').trim();
+
+  if (!id || !addressId) {
+    throw new Error('Missing required fields for set primary.');
+  }
+
+  const caller = await getCaller();
+  await caller.av.setPrimaryContact({ id, addressId });
+
+  revalidatePath(`/av/addresses/${addressId}`);
+}
+
+async function deleteContactAction(formData: FormData) {
+  'use server';
+
+  const id = String(formData.get('id') ?? '').trim();
+  const addressId = String(formData.get('addressId') ?? '').trim();
+
+  if (!id || !addressId) {
+    throw new Error('Missing required fields for contact deletion.');
+  }
+
+  const caller = await getCaller();
+  await caller.av.deleteContact({ id, addressId });
+
+  revalidatePath(`/av/addresses/${addressId}`);
+}
+
 type PageProps = {
   params: Promise<{ id: string }>;
 };
@@ -131,11 +191,38 @@ export default async function AddressDetailPage({ params }: PageProps) {
         <ul>
           {address.contacts.map((contact) => (
             <li key={contact.id}>
-              {contact.firstName} {contact.lastName}
-              {contact.role ? ` · ${contact.role}` : ''}
-              {contact.email ? ` · ${contact.email}` : ''}
-              {contact.phone ? ` · ${contact.phone}` : ''}
-              {contact.isPrimary ? ' · Primär' : ''}
+              <form action={updateContactAction} style={{ display: 'grid', gap: '0.4rem', marginBottom: '0.8rem' }}>
+                <input type="hidden" name="id" value={contact.id} />
+                <input type="hidden" name="addressId" value={address.id} />
+                <input name="firstName" defaultValue={contact.firstName} required />
+                <input name="lastName" defaultValue={contact.lastName} required />
+                <input name="role" defaultValue={contact.role ?? ''} placeholder="Funktion" />
+                <input name="email" defaultValue={contact.email ?? ''} placeholder="E-Mail" />
+                <input name="phone" defaultValue={contact.phone ?? ''} placeholder="Telefon" />
+                <label style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                  <input name="isPrimary" type="checkbox" defaultChecked={contact.isPrimary} />
+                  Primärer Kontakt
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button type="submit">Kontakt aktualisieren</button>
+                </div>
+              </form>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                {!contact.isPrimary ? (
+                  <form action={setPrimaryContactAction}>
+                    <input type="hidden" name="id" value={contact.id} />
+                    <input type="hidden" name="addressId" value={address.id} />
+                    <button type="submit">Als Primär setzen</button>
+                  </form>
+                ) : (
+                  <span>Primärkontakt</span>
+                )}
+                <form action={deleteContactAction}>
+                  <input type="hidden" name="id" value={contact.id} />
+                  <input type="hidden" name="addressId" value={address.id} />
+                  <button type="submit">Kontakt löschen</button>
+                </form>
+              </div>
             </li>
           ))}
         </ul>

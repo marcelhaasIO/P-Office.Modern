@@ -42,6 +42,27 @@ const contactInput = z.object({
   isPrimary: z.boolean().default(false)
 });
 
+const contactUpdateInput = z.object({
+  id: z.string().min(1),
+  addressId: z.string().min(1),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  role: z.string().optional(),
+  isPrimary: z.boolean().default(false)
+});
+
+const contactDeleteInput = z.object({
+  id: z.string().min(1),
+  addressId: z.string().min(1)
+});
+
+const setPrimaryContactInput = z.object({
+  id: z.string().min(1),
+  addressId: z.string().min(1)
+});
+
 export const avRouter = createRouter({
   getAddress: companyProcedure.input(addressIdInput).query(async ({ ctx, input }) => {
     const address = await ctx.db.address.findFirst({
@@ -239,6 +260,142 @@ export const avRouter = createRouter({
     });
 
     return created;
+  }),
+
+  updateContact: companyProcedure.input(contactUpdateInput).mutation(async ({ ctx, input }) => {
+    const existing = await ctx.db.contactPerson.findFirst({
+      where: {
+        id: input.id,
+        addressId: input.addressId,
+        address: {
+          companyId: ctx.companyId
+        }
+      },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      throw new Error('Contact not found for current company context.');
+    }
+
+    if (input.isPrimary) {
+      await ctx.db.contactPerson.updateMany({
+        where: {
+          addressId: input.addressId,
+          isPrimary: true,
+          id: { not: input.id }
+        },
+        data: { isPrimary: false }
+      });
+    }
+
+    const updated = await ctx.db.contactPerson.update({
+      where: { id: input.id },
+      data: {
+        firstName: input.firstName,
+        lastName: input.lastName,
+        email: input.email,
+        phone: input.phone,
+        role: input.role,
+        isPrimary: input.isPrimary
+      }
+    });
+
+    await ctx.db.auditLog.create({
+      data: {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        actorUserId: ctx.userId,
+        tableName: 'ContactPerson',
+        recordId: updated.id,
+        action: 'UPDATE',
+        newValues: updated,
+        changedFields: ['firstName', 'lastName', 'email', 'phone', 'role', 'isPrimary']
+      }
+    });
+
+    return updated;
+  }),
+
+  setPrimaryContact: companyProcedure.input(setPrimaryContactInput).mutation(async ({ ctx, input }) => {
+    const existing = await ctx.db.contactPerson.findFirst({
+      where: {
+        id: input.id,
+        addressId: input.addressId,
+        address: {
+          companyId: ctx.companyId
+        }
+      },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      throw new Error('Contact not found for current company context.');
+    }
+
+    await ctx.db.contactPerson.updateMany({
+      where: {
+        addressId: input.addressId,
+        isPrimary: true,
+        id: { not: input.id }
+      },
+      data: { isPrimary: false }
+    });
+
+    const updated = await ctx.db.contactPerson.update({
+      where: { id: input.id },
+      data: { isPrimary: true }
+    });
+
+    await ctx.db.auditLog.create({
+      data: {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        actorUserId: ctx.userId,
+        tableName: 'ContactPerson',
+        recordId: updated.id,
+        action: 'UPDATE',
+        newValues: updated,
+        changedFields: ['isPrimary']
+      }
+    });
+
+    return updated;
+  }),
+
+  deleteContact: companyProcedure.input(contactDeleteInput).mutation(async ({ ctx, input }) => {
+    const existing = await ctx.db.contactPerson.findFirst({
+      where: {
+        id: input.id,
+        addressId: input.addressId,
+        address: {
+          companyId: ctx.companyId
+        }
+      },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      throw new Error('Contact not found for current company context.');
+    }
+
+    await ctx.db.contactPerson.delete({
+      where: { id: input.id }
+    });
+
+    await ctx.db.auditLog.create({
+      data: {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        actorUserId: ctx.userId,
+        tableName: 'ContactPerson',
+        recordId: input.id,
+        action: 'DELETE',
+        changedFields: ['id']
+      }
+    });
+
+    return { deleted: true, id: input.id };
   }),
 
   plzAutocomplete: companyProcedure
