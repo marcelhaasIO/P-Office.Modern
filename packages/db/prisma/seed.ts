@@ -2,6 +2,19 @@ import { PrismaClient, AddressType, CompanyStatus, UserStatus } from '@prisma/cl
 
 const prisma = new PrismaClient();
 
+async function tableExists(tableName: string): Promise<boolean> {
+  const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    select exists (
+      select 1
+      from information_schema.tables
+      where table_schema = 'public'
+        and table_name = ${tableName}
+    ) as "exists"
+  `;
+
+  return Boolean(rows[0]?.exists);
+}
+
 async function main() {
   const tenant = await prisma.tenant.upsert({
     where: { code: 'muster' },
@@ -159,45 +172,49 @@ async function main() {
     });
   }
 
-  const accounts = [
-    ['1020', 'Bank', 'ASSET', false],
-    ['1100', 'Debitoren', 'ASSET', false],
-    ['1170', 'Vorsteuer', 'ASSET', true],
-    ['1400', 'Vorräte', 'ASSET', false],
-    ['2000', 'Kreditoren', 'LIABILITY', false],
-    ['2201', 'Geschuldete MWST', 'LIABILITY', true],
-    ['3200', 'Erlöse', 'REVENUE', false],
-    ['5200', 'Lohnaufwand', 'EXPENSE', false],
-    ['6800', 'Abschreibungen', 'EXPENSE', false]
-  ] as const;
+  if (await tableExists('Account')) {
+    const accounts = [
+      ['1020', 'Bank', 'ASSET', false],
+      ['1100', 'Debitoren', 'ASSET', false],
+      ['1170', 'Vorsteuer', 'ASSET', true],
+      ['1400', 'Vorräte', 'ASSET', false],
+      ['2000', 'Kreditoren', 'LIABILITY', false],
+      ['2201', 'Geschuldete MWST', 'LIABILITY', true],
+      ['3200', 'Erlöse', 'REVENUE', false],
+      ['5200', 'Lohnaufwand', 'EXPENSE', false],
+      ['6800', 'Abschreibungen', 'EXPENSE', false]
+    ] as const;
 
-  for (const [accountNo, name, type, vatRelevant] of accounts) {
-    await prisma.account.upsert({
-      where: { companyId_accountNo: { companyId: company.id, accountNo } },
-      update: { name, type, vatRelevant },
+    for (const [accountNo, name, type, vatRelevant] of accounts) {
+      await prisma.account.upsert({
+        where: { companyId_accountNo: { companyId: company.id, accountNo } },
+        update: { name, type, vatRelevant },
+        create: {
+          companyId: company.id,
+          accountNo,
+          name,
+          type,
+          vatRelevant
+        }
+      });
+    }
+  }
+
+  if (await tableExists('VatCode')) {
+    await prisma.vatCode.upsert({
+      where: { companyId_code_activeFrom: { companyId: company.id, code: 'N81', activeFrom: new Date('2024-01-01T00:00:00.000Z') } },
+      update: {},
       create: {
         companyId: company.id,
-        accountNo,
-        name,
-        type,
-        vatRelevant
+        code: 'N81',
+        ratePct: 8.1,
+        method: 'AGREED',
+        inputAccountNo: '1170',
+        outputAccountNo: '2201',
+        activeFrom: new Date('2024-01-01T00:00:00.000Z')
       }
     });
   }
-
-  await prisma.vatCode.upsert({
-    where: { companyId_code_activeFrom: { companyId: company.id, code: 'N81', activeFrom: new Date('2024-01-01T00:00:00.000Z') } },
-    update: {},
-    create: {
-      companyId: company.id,
-      code: 'N81',
-      ratePct: 8.1,
-      method: 'AGREED',
-      inputAccountNo: '1170',
-      outputAccountNo: '2201',
-      activeFrom: new Date('2024-01-01T00:00:00.000Z')
-    }
-  });
 
   const plzRows = [
     ['8001', 'Zürich', 'ZH'],
@@ -214,41 +231,43 @@ async function main() {
     });
   }
 
-  const existingLayout = await prisma.printLayout.findFirst({
-    where: {
-      tenantId: tenant.id,
-      companyId: company.id,
-      moduleCode: 'AB',
-      documentType: 'OFFER',
-      name: 'Standard Offerte'
-    }
-  });
-
-  const layout =
-    existingLayout ??
-    (await prisma.printLayout.create({
-      data: {
+  if ((await tableExists('PrintLayout')) && (await tableExists('PrintLayoutVersion'))) {
+    const existingLayout = await prisma.printLayout.findFirst({
+      where: {
         tenantId: tenant.id,
         companyId: company.id,
         moduleCode: 'AB',
         documentType: 'OFFER',
-        name: 'Standard Offerte',
-        isDefault: true
+        name: 'Standard Offerte'
       }
-    }));
+    });
 
-  await prisma.printLayoutVersion.upsert({
-    where: { layoutId_versionNo: { layoutId: layout.id, versionNo: 1 } },
-    update: {},
-    create: {
-      layoutId: layout.id,
-      versionNo: 1,
-      schemaJson: { version: 1, page: 'A4', elements: [] },
-      rendererJson: { engine: 'react-pdf' },
-      isPublished: true,
-      checksumSha256: 'seed-v1'
-    }
-  });
+    const layout =
+      existingLayout ??
+      (await prisma.printLayout.create({
+        data: {
+          tenantId: tenant.id,
+          companyId: company.id,
+          moduleCode: 'AB',
+          documentType: 'OFFER',
+          name: 'Standard Offerte',
+          isDefault: true
+        }
+      }));
+
+    await prisma.printLayoutVersion.upsert({
+      where: { layoutId_versionNo: { layoutId: layout.id, versionNo: 1 } },
+      update: {},
+      create: {
+        layoutId: layout.id,
+        versionNo: 1,
+        schemaJson: { version: 1, page: 'A4', elements: [] },
+        rendererJson: { engine: 'react-pdf' },
+        isPublished: true,
+        checksumSha256: 'seed-v1'
+      }
+    });
+  }
 
   await prisma.auditLog.create({
     data: {
